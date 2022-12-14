@@ -1,0 +1,37 @@
+on:
+  push:
+    branches:
+      - production
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment: production
+    name: Set environment variables
+    env:
+      APP_ID: ${{ secrets.BACK4APP_PRODUCTION_APP_ID }}
+      EMAIL_ACCOUNT: ${{ secrets.BACK4APP_EMAIL_ACCOUNT }}
+      ACCOUNT_KEY: ${{ secrets.BACK4APP_ACCOUNT_KEY }}
+      APP_NAME: ${{ secrets.PRODUCTION_APP_NAME }}
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set environment variables
+        id: set-environment
+        run: |
+          echo "Current branch: ${{ github.ref }}"
+      - name: Update and upgrade Linux dependencies
+        id: linux-update
+        run: |
+          sudo apt update && sudo apt upgrade
+          sudo apt install curl sudo wget git golang-go jo -y
+          sudo apt autoremove -y && sudo apt autoclean -y
+      - name: Install b4a-cli and create deployment files
+        id: install-dependencies
+        run: |
+          curl https://raw.githubusercontent.com/back4app/parse-cli/back4app/installer.sh | sudo /bin/bash
+          mkdir -p ${HOME}/.back4app && cd ${HOME}/.back4app
+          printf "machine parsecli.back4app.com\n\tlogin default\n\tpassword $ACCOUNT_KEY" >> netrc
+          cd ${{ github.workspace }}
+          printf "{\n\t\"project_type\": 1,\n\t\"parse\":{\n\t\t\t\t\"jssdk\": \"2.2.25\"\n\t\t\t\t},\n\t\"email\": \"$EMAIL_ACCOUNT\"\n\t}\n}" >> .parse.project
+          printf "{\n\t\"applications\": {\n\t\t\"$APP_NAME\": {\n\t\t\t\"applicationId\": \"$APP_ID\"\n\t\t\t},\n\t\"_default\": {\n\t\t\t\t\"link\": \"$APP_NAME\"\n\t\t\t}\n\t}\n}" >> .parse.local
+          b4a deploy
